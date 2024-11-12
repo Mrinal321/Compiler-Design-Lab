@@ -1,0 +1,146 @@
+#include "main.h"
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+
+#include <stdint.h>
+
+// Define base addresses and offsets
+#define RCC_BASE        0x40021000
+#define GPIOC_BASE      0x40011000
+#define TIM2_BASE       0x40000000
+
+#define RCC_APB1ENR     (*(volatile unsigned long *)(RCC_BASE + 0x1C))
+#define RCC_APB2ENR     (*(volatile unsigned long *)(RCC_BASE + 0x18))
+#define GPIOC_CRH       (*(volatile unsigned long *)(GPIOC_BASE + 0x04))
+#define GPIOC_ODR       (*(volatile unsigned long *)(GPIOC_BASE + 0x0C))
+#define TIM2_CR1        (*(volatile unsigned long *)(TIM2_BASE + 0x00))
+#define TIM2_SR         (*(volatile unsigned long *)(TIM2_BASE + 0x10))
+#define TIM2_PSC        (*(volatile unsigned long *)(TIM2_BASE + 0x28))
+#define TIM2_ARR        (*(volatile unsigned long *)(TIM2_BASE + 0x2C))
+
+
+
+int main() {
+	RCC_APB2ENR |= (1 << 4);  // Enable GPIOC clock
+	RCC_APB1ENR |= (1 << 0);  // Enable TIM2 clock
+
+	//configuration of GPIOC for pc13 pin.
+	GPIOC_CRH &= ~(0x3 << 20);  // GPIOC_CRH register 21th & 20th are MODE13 bits for PC13.
+	GPIOC_CRH |= (1 << 20);     // Set MODE to 01 for PC13 pin that causes LED to be blinked.
+
+
+	 TIM2_PSC = 7999;  // Prescaler value (0 - 7999 = 8000). Divided HSI(8MHz) by 8000 to get TIM2 clock 1000 Hz.
+	 TIM2_ARR = 499;   // (0-999) Timer counter count from 0 to 1000 in 1000Hz TIM2 clock. Then count again 0 -999.
+	 	 	 	 	   // So for every 1 second Timer clock counter to 0.
+	 TIM2_CR1 |= (1 << 0);  // Enable the timer counter by setting TIM2_CR1 register's 0th bit to 1.
+
+
+    while (1) {
+        if (TIM2_SR & (1 << 0)) {  //TIM2_SR 0th bit(called update interrupt flag bit) is automatically set by 1 when timer counter reach TIM2_ARR value
+        						   //i.e 999.
+            TIM2_SR &= ~(1 << 0);  // Reset TIM2_SR 0th by 0.
+            // Toggle the LED
+            GPIOC_ODR ^= (1 << 13); //when GPIOC_ODR register's 13th bit 1 then LED turns on by the use of pc13 pin.
+        }
+    }
+
+    return 0;
+}
+
+
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : PC13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
+}
+
+/* USER CODE BEGIN 4 */
+
+/* USER CODE END 4 */
+
+/**
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
+  {
+  }
+  /* USER CODE END Error_Handler_Debug */
+}
+
+#ifdef  USE_FULL_ASSERT
+/**
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
+void assert_failed(uint8_t *file, uint32_t line)
+{
+  /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line number,
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* USER CODE END 6 */
+}
+#endif /* USE_FULL_ASSERT */
+
